@@ -13,16 +13,43 @@ workspace = true
 
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
-mycelium-proj = { path = "../mycelium-proj" }
-mycelium-spore = { path = "../mycelium-spore" }
+mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "cfc934b32c0b7b57becbb7ddfe3c516712c6ec0e" }
+mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "12f117d395545ee89ba144eb858de11f0b36ab16" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
-mycelium-l1 = { path = "../mycelium-l1" }
+mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "cd32a1ed7ab7d2be38c9c3047da7318d182b7a1c" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
-mycelium-interp = { path = "../mycelium-interp" }
+mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "ab9cee665b620ed80ab74ea61ea639817dc49077" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
-mycelium-cli-common = { path = "../mycelium-cli-common" }
+mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "c673fafdd1bcecb713e3560689af6ab152033867" }
 
 [[bin]]
 name = "myc"
 path = "src/bin/myc.rs"
+
+# --- standalone workspace root (course-correction Phase B, 2026-07-18; steer handoff §6.2) ---
+[workspace]
+
+[workspace.package]
+version = "0.464.0"
+edition = "2021"
+rust-version = "1.96.1"
+license = "MIT"
+repository = "https://github.com/tzervas/mycelium-cli"
+
+[workspace.dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+blake3 = "1"
+
+[workspace.lints.rust]
+# ADR-014: unsafe permitted-but-documented; the check is clippy::undocumented_unsafe_blocks.
+unsafe_code = "allow"
+
+[workspace.lints.clippy]
+all = { level = "warn", priority = -1 }
+undocumented_unsafe_blocks = "warn"
+
+# G2 never-silent arithmetic: release builds panic on overflow (monorepo parity).
+[profile.release]
+overflow-checks = true
