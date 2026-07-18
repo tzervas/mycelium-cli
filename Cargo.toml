@@ -13,13 +13,13 @@ workspace = true
 
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
-mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "cfc934b32c0b7b57becbb7ddfe3c516712c6ec0e" }
-mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "12f117d395545ee89ba144eb858de11f0b36ab16" }
+mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "20b8a6d264ac728e81cfe8cd90cec8d2a91370be" }
+mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "283f9fd901607841d5302d5935d15d873a32eef7" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
-mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "cd32a1ed7ab7d2be38c9c3047da7318d182b7a1c" }
+mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "2b92f54349eb0d4f67e32e983874df76908b9ab6" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
-mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "ab9cee665b620ed80ab74ea61ea639817dc49077" }
+mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "487b1e7049ff521b1a6fa33f376245089e7dc1e1" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "c673fafdd1bcecb713e3560689af6ab152033867" }
 
