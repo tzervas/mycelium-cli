@@ -29,7 +29,7 @@ net-host = ["dep:mycelium-std-net"]
 mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "20b8a6d264ac728e81cfe8cd90cec8d2a91370be" }
 mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "283f9fd901607841d5302d5935d15d873a32eef7" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
-mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "2b92f54349eb0d4f67e32e983874df76908b9ab6" }
+mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "31f7aaa956cca0e1c7a894eeaff4d10d58b5b2b8" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
 # Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
