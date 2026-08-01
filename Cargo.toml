@@ -39,7 +39,7 @@ mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", 
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
 # Optional — see feature `host-registry`. Pin: mycelium-std-sys-host main (process floor + time/rand).
 # Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.
-mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "fec11cd90f05df4470e328eedcb00e64f11ddf9d", optional = true, features = ["host-registry"] }
+mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "b03043df2e0328e47cb8bf01a91e8d28b9254c79", optional = true, features = ["host-registry"] }
 # S-STD-NET / WP-6: wild:http_request via `install_http_host_ops`. Optional — see feature `net-host`.
 # Pin: mycelium-std-net main tip. Enable the dep's `host-registry` feature for the install surface.
 mycelium-std-net = { git = "https://github.com/tzervas/mycelium-std-net", rev = "13de906a9d1b750b16660c00998778e1c95d7721", optional = true, features = ["host-registry"] }
