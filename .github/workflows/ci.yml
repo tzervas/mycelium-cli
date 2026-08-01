@@ -16,3 +16,6 @@ jobs:
       - run: cargo fmt --check
       - run: cargo clippy --all-targets -- -D warnings
       - run: cargo test
+      # S-STD-NET / WP-6: optional wild:http_request path (net-host off by default).
+      - run: cargo test --features net-host
+      - run: cargo clippy --all-targets --features net-host -- -D warnings
