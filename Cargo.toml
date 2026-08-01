@@ -26,23 +26,23 @@ net-host = ["dep:mycelium-std-net"]
 
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
-mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "3209a570c472cd8a94c52f8562cbbfd07c12f322" }
-mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "7dc1ca165d42191aa0b26b8d1d42fcd2ddd5945b" }
+mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "610624021a0ea43d3919d4200d7522e31a6dcce0" }
+mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "9363b9607de027bae5d3d389c9fc08859810d8d5" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
-mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "31f7aaa956cca0e1c7a894eeaff4d10d58b5b2b8" }
+mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "2e2a18a4e2933aee8cac16a020589d620e553fb6" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
 # Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
-mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "cb3a96348f718661dbd3db43224a036df272e177" }
+mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "7842042d770108b2d179ff2874f1871dc4821604" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "28e81b67a5d21bc3bdf8904a6ce36dd9ccb515b9" }
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
 # Optional — see feature `host-registry`. Pin: mycelium-std-sys-host main (process floor + time/rand).
 # Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.
-mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "e2ff385a527271126bd7b86a0041f5c6fc747b03", optional = true, features = ["host-registry"] }
+mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "fec11cd90f05df4470e328eedcb00e64f11ddf9d", optional = true, features = ["host-registry"] }
 # S-STD-NET / WP-6: wild:http_request via `install_http_host_ops`. Optional — see feature `net-host`.
 # Pin: mycelium-std-net main tip. Enable the dep's `host-registry` feature for the install surface.
-mycelium-std-net = { git = "https://github.com/tzervas/mycelium-std-net", rev = "c452977c996b61ca1a811e7662d360500cf77d4b", optional = true, features = ["host-registry"] }
+mycelium-std-net = { git = "https://github.com/tzervas/mycelium-std-net", rev = "13de906a9d1b750b16660c00998778e1c95d7721", optional = true, features = ["host-registry"] }
 
 [[bin]]
 name = "myc"
