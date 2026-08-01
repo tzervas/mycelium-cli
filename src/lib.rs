@@ -30,12 +30,13 @@
 //! would require a resumable L1 token-stream API that does not exist yet (flagged future work).
 
 //!
-//! ## Host registry (S-HOST-REGISTRY / WP-4)
+//! ## Host registry (S-HOST-REGISTRY / WP-4 + S-STD-NET / WP-6)
 //! `myc run` builds its prim registry via [`run_prim_registry`]:
 //! [`PrimRegistry::with_builtins`](mycelium_interp::PrimRegistry::with_builtins), then — when the
-//! Cargo feature `host-registry` is enabled — `mycelium_std_sys_host::install_default_host_ops`
-//! before evaluation. Without install the registry grants **zero** `wild:` ops (empty-by-design;
-//! RFC-0028 §4.3 — never silent G2).
+//! Cargo feature `host-registry` is enabled — `mycelium_std_sys_host::install_default_host_ops`,
+//! then — when `net-host` is enabled — `mycelium_std_net::install_http_host_ops` before evaluation.
+//! Without install the registry grants **zero** `wild:` ops (empty-by-design; RFC-0028 §4.3 — never
+//! silent G2). `net-host` is **opt-in** (ambient network is not floor).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as StdRead;
@@ -300,21 +301,32 @@ pub struct RunOptions {
     pub unbounded: bool,
 }
 
-/// Build the prim registry used by `myc run` (S-HOST-REGISTRY / WP-4).
+/// Build the prim registry used by `myc run` (S-HOST-REGISTRY / WP-4 + S-STD-NET / WP-6).
 ///
-/// Always starts from [`PrimRegistry::with_builtins`] (no `wild:` ops). When the Cargo feature
-/// `host-registry` is enabled, calls `mycelium_std_sys_host::install_default_host_ops` so the
-/// audited `@std-sys` floor (`time_*`, `rand_fill`, later `fs_*`) is granted before evaluation.
-/// Without that feature the table stays empty-by-design — unresolved `wild:` fails loud (G2).
+/// Always starts from [`PrimRegistry::with_builtins`] (no `wild:` ops). Then, in order:
+/// 1. When Cargo feature `host-registry` is enabled — `mycelium_std_sys_host::install_default_host_ops`
+///    so the audited `@std-sys` floor (`time_*`, `rand_fill`, `process_*`, later `fs_*`) is granted.
+/// 2. When Cargo feature `net-host` is enabled — `mycelium_std_net::install_http_host_ops` so
+///    catalog name `http_request` is granted as `wild:http_request` (S-STD-NET; not floor).
+///
+/// Without those features the corresponding ops stay empty-by-design — unresolved `wild:` fails
+/// loud (G2). Architecture: PrimRegistry only (S1 hybrid); no HostOpRegistry from runtime/dev.
 #[must_use]
 pub fn run_prim_registry() -> PrimRegistry {
-    #[cfg(feature = "host-registry")]
+    #[cfg(any(feature = "host-registry", feature = "net-host"))]
     {
         let mut reg = PrimRegistry::with_builtins();
-        mycelium_std_sys_host::install_default_host_ops(&mut reg);
+        #[cfg(feature = "host-registry")]
+        {
+            mycelium_std_sys_host::install_default_host_ops(&mut reg);
+        }
+        #[cfg(feature = "net-host")]
+        {
+            mycelium_std_net::install_http_host_ops(&mut reg);
+        }
         reg
     }
-    #[cfg(not(feature = "host-registry"))]
+    #[cfg(not(any(feature = "host-registry", feature = "net-host")))]
     {
         PrimRegistry::with_builtins()
     }
@@ -326,14 +338,21 @@ pub const fn host_registry_enabled() -> bool {
     cfg!(feature = "host-registry")
 }
 
+/// Whether this build installs `wild:http_request` on `myc run` (`net-host` feature).
+#[must_use]
+pub const fn net_host_enabled() -> bool {
+    cfg!(feature = "net-host")
+}
+
 /// The reference interpreter to execute a `myc run` under, given [`RunOptions`]. Default: the
 /// deterministic 4096-floor budget (unchanged). With `--unbounded`: the depth ceiling is lifted to
 /// [`u32::MAX`] via [`Interpreter::with_depth`] (RFC-0041 §5) — refusal then bounds
 /// on available memory/host stack, not the deterministic budget. Never-silent even so: the growable
 /// deep stack keeps it an explicit refusal, never a `SIGABRT`.
 ///
-/// The prim registry is always [`run_prim_registry`] (builtins + optional default host ops), not a
-/// bare [`Interpreter::default`], so host install cannot be accidentally skipped.
+/// The prim registry is always [`run_prim_registry`] (builtins + optional default host ops +
+/// optional net host ops), not a bare [`Interpreter::default`], so host install cannot be
+/// accidentally skipped.
 fn interpreter_for(opts: &RunOptions) -> Interpreter {
     let prims = run_prim_registry();
     let interp = Interpreter::new(prims, Box::new(IdentitySwapEngine));

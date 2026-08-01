@@ -29,8 +29,8 @@ cargo test
 
 `myc run` constructs a `PrimRegistry` via `PrimRegistry::with_builtins()`, then calls
 `mycelium_std_sys_host::install_default_host_ops` **before** evaluation so the audited
-`@std-sys` floor ops (`time_mono_nanos`, `time_wall_nanos`, `rand_fill`, later `fs_*`) are
-granted under the `wild:` namespace.
+`@std-sys` floor ops (`time_mono_nanos`, `time_wall_nanos`, `rand_fill`, `process_*`, later
+`fs_*`) are granted under the `wild:` namespace.
 
 | Build | Host ops | Behaviour |
 |-------|----------|-----------|
@@ -44,9 +44,26 @@ Compile without the host table (e.g. while co-developing against a tip that lack
 cargo test --no-default-features
 ```
 
-Co-dev pins (WIP until merge):
+### Feature: `net-host` (S-STD-NET / WP-6) — **opt-in**
 
-- [`mycelium-runtime#11`](https://github.com/tzervas/mycelium-runtime/pull/11) — `register_host` / `has_host` / `install_host_ops`
-- [`mycelium-std-sys-host#7`](https://github.com/tzervas/mycelium-std-sys-host/pull/7) — `install_default_host_ops` (`host-registry` feature on that crate)
+Ambient HTTPS is **not** floor. Enable `net-host` to call
+`mycelium_std_net::install_http_host_ops` after the default install so catalog name
+`http_request` is granted as `wild:http_request`:
+
+```bash
+cargo test --features net-host
+cargo run --features net-host -- run
+```
+
+| Build | `http_request` | Behaviour |
+|-------|----------------|-----------|
+| default (no `net-host`) | **absent** | unresolved `wild:http_request` fails loud (G2) |
+| `--features net-host` | installed | `has_host("http_request")` true after install |
+
+Pins:
+
+- [`mycelium-runtime`](https://github.com/tzervas/mycelium-runtime) main — `register_host` / `has_host` / `install_host_ops`
+- [`mycelium-std-sys-host`](https://github.com/tzervas/mycelium-std-sys-host) main — `install_default_host_ops`
+- [`mycelium-std-net`](https://github.com/tzervas/mycelium-std-net) main — `install_http_host_ops` (`host-registry` feature on that crate)
 
 Hub: [mycelium-lang#30](https://github.com/tzervas/mycelium-lang/issues/30).

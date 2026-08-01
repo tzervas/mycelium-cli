@@ -1,4 +1,4 @@
-//! S-HOST-REGISTRY / WP-4 — `myc run` prim-registry install path.
+//! S-HOST-REGISTRY / WP-4 + S-STD-NET / WP-6 — `myc run` prim-registry install path.
 //!
 //! White-box: [`crate::run_prim_registry`] is the single construction point used by
 //! `interpreter_for` before evaluation.
@@ -15,6 +15,9 @@ const FLOOR_OPS: &[&str] = &[
     "process_wait",
     "process_kill",
 ];
+
+/// Catalog net op from `install_http_host_ops` (std-net / S-STD-NET) — not floor.
+const NET_OPS: &[&str] = &["http_request"];
 
 /// Without host install (`--no-default-features`), the run registry grants no `wild:` ops.
 #[cfg(not(feature = "host-registry"))]
@@ -50,6 +53,9 @@ fn with_builtins_alone_grants_no_host_ops() {
     for name in FLOOR_OPS {
         assert!(!reg.has_host(name), "builtins must not grant {name}");
     }
+    for name in NET_OPS {
+        assert!(!reg.has_host(name), "builtins must not grant {name}");
+    }
 }
 
 /// Default / `host-registry` feature: floor ops present after `install_default_host_ops`.
@@ -65,6 +71,50 @@ fn run_prim_registry_has_host_after_default_install() {
         assert!(
             reg.has_host(name),
             "after install_default_host_ops, has_host({name}) must be true"
+        );
+        assert!(
+            reg.has_host(&format!("wild:{name}")),
+            "qualified wild:{name} must also resolve"
+        );
+        assert!(
+            reg.get(&format!("wild:{name}")).is_some(),
+            "get(wild:{name}) must be Some after install"
+        );
+    }
+}
+
+/// Default build (no `net-host`): `http_request` must stay absent (ambient net is opt-in).
+#[cfg(not(feature = "net-host"))]
+#[test]
+fn run_prim_registry_http_request_absent_without_net_host() {
+    assert!(!net_host_enabled());
+    let reg = run_prim_registry();
+    for name in NET_OPS {
+        assert!(
+            !reg.has_host(name),
+            "without net-host feature, `{name}` must not be granted (empty-by-design)"
+        );
+        assert!(
+            !reg.has_host(&format!("wild:{name}")),
+            "qualified wild:{name} must also be absent"
+        );
+        assert!(
+            reg.get(&format!("wild:{name}")).is_none(),
+            "get(wild:{name}) must be None so eval fails loud (UnknownPrim / host capability)"
+        );
+    }
+}
+
+/// `--features net-host`: `install_http_host_ops` grants catalog `http_request`.
+#[cfg(feature = "net-host")]
+#[test]
+fn run_prim_registry_has_http_request_with_net_host() {
+    assert!(net_host_enabled(), "net-host feature must be enabled");
+    let reg = run_prim_registry();
+    for name in NET_OPS {
+        assert!(
+            reg.has_host(name),
+            "after install_http_host_ops, has_host({name}) must be true"
         );
         assert!(
             reg.has_host(&format!("wild:{name}")),
