@@ -26,8 +26,8 @@ net-host = ["dep:mycelium-std-net"]
 
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
-mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "20b8a6d264ac728e81cfe8cd90cec8d2a91370be" }
-mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "283f9fd901607841d5302d5935d15d873a32eef7" }
+mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "3209a570c472cd8a94c52f8562cbbfd07c12f322" }
+mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "7dc1ca165d42191aa0b26b8d1d42fcd2ddd5945b" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
 mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "31f7aaa956cca0e1c7a894eeaff4d10d58b5b2b8" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
