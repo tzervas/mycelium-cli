@@ -26,7 +26,7 @@ net-host = ["dep:mycelium-std-net"]
 
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
-mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "610624021a0ea43d3919d4200d7522e31a6dcce0" }
+mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "ccc1936734875d098fa99cce7570b23f1f6880e3" }
 mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "9363b9607de027bae5d3d389c9fc08859810d8d5" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
 mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "4e4a29679d8e941eab86fad40f49c9947e68eefd" }
