@@ -27,14 +27,14 @@ mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "283
 mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "2b92f54349eb0d4f67e32e983874df76908b9ab6" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
-# WP-4 co-dev pin: mycelium-runtime#11 (HostCallRegistry / register_host / has_host / install_host_ops).
-mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "0a284a79573ecfdab3db719c5f76ee9abcd155c1" }
+# Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
+mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "4af6d0051f4da4961a108869c56407e32b9a372b" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "c673fafdd1bcecb713e3560689af6ab152033867" }
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
 # Optional — see feature `host-registry`. Co-dev pin: mycelium-std-sys-host#7 tip (L-HOST).
 # Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.
-mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "067da5070e0fea796a6ca030c845c140985cab69", optional = true, features = ["host-registry"] }
+mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "78fe4ad93c8fd5dd408b50502a9c3d4c48e8893d", optional = true, features = ["host-registry"] }
 
 [[bin]]
 name = "myc"

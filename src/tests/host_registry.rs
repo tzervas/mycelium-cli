@@ -7,7 +7,14 @@ use crate::*;
 use mycelium_interp::PrimRegistry;
 
 /// Floor op names from `install_default_host_ops` (sys-host INSTALL_HOST_OPS / host_registry).
-const FLOOR_OPS: &[&str] = &["time_mono_nanos", "time_wall_nanos", "rand_fill"];
+const FLOOR_OPS: &[&str] = &[
+    "time_mono_nanos",
+    "time_wall_nanos",
+    "rand_fill",
+    "process_spawn",
+    "process_wait",
+    "process_kill",
+];
 
 /// Without host install (`--no-default-features`), the run registry grants no `wild:` ops.
 #[cfg(not(feature = "host-registry"))]
