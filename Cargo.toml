@@ -35,7 +35,7 @@ mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "31f7aaa95
 # Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
 mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "cb3a96348f718661dbd3db43224a036df272e177" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
-mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "c673fafdd1bcecb713e3560689af6ab152033867" }
+mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "13c4ae25357c45468731fc32a9ecbc946a9aac52" }
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
 # Optional — see feature `host-registry`. Pin: mycelium-std-sys-host main (process floor + time/rand).
 # Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.
