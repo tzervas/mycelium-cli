@@ -29,10 +29,19 @@
 //! a time. **v0 I/O is whole-input-buffered** (`Declared`); true per-`;`-component incremental I/O
 //! would require a resumable L1 token-stream API that does not exist yet (flagged future work).
 
+//!
+//! ## Host registry (S-HOST-REGISTRY / WP-4)
+//! `myc run` builds its prim registry via [`run_prim_registry`]:
+//! [`PrimRegistry::with_builtins`](mycelium_interp::PrimRegistry::with_builtins), then — when the
+//! Cargo feature `host-registry` is enabled — `mycelium_std_sys_host::install_default_host_ops`
+//! before evaluation. Without install the registry grants **zero** `wild:` ops (empty-by-design;
+//! RFC-0028 §4.3 — never silent G2).
+
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as StdRead;
 use std::path::{Path, PathBuf};
 
+use mycelium_interp::{IdentitySwapEngine, Interpreter, PrimRegistry};
 use mycelium_l1::ast::{Item, Path as NoduleAstPath};
 use mycelium_l1::lexer::lex;
 use mycelium_l1::token::{Pos, Spanned, Tok};
@@ -291,13 +300,43 @@ pub struct RunOptions {
     pub unbounded: bool,
 }
 
+/// Build the prim registry used by `myc run` (S-HOST-REGISTRY / WP-4).
+///
+/// Always starts from [`PrimRegistry::with_builtins`] (no `wild:` ops). When the Cargo feature
+/// `host-registry` is enabled, calls `mycelium_std_sys_host::install_default_host_ops` so the
+/// audited `@std-sys` floor (`time_*`, `rand_fill`, later `fs_*`) is granted before evaluation.
+/// Without that feature the table stays empty-by-design — unresolved `wild:` fails loud (G2).
+#[must_use]
+pub fn run_prim_registry() -> PrimRegistry {
+    #[cfg(feature = "host-registry")]
+    {
+        let mut reg = PrimRegistry::with_builtins();
+        mycelium_std_sys_host::install_default_host_ops(&mut reg);
+        reg
+    }
+    #[cfg(not(feature = "host-registry"))]
+    {
+        PrimRegistry::with_builtins()
+    }
+}
+
+/// Whether this build installs the default host-op table on `myc run` (`host-registry` feature).
+#[must_use]
+pub const fn host_registry_enabled() -> bool {
+    cfg!(feature = "host-registry")
+}
+
 /// The reference interpreter to execute a `myc run` under, given [`RunOptions`]. Default: the
 /// deterministic 4096-floor budget (unchanged). With `--unbounded`: the depth ceiling is lifted to
-/// [`u32::MAX`] via [`mycelium_interp::Interpreter::with_depth`] (RFC-0041 §5) — refusal then bounds
+/// [`u32::MAX`] via [`Interpreter::with_depth`] (RFC-0041 §5) — refusal then bounds
 /// on available memory/host stack, not the deterministic budget. Never-silent even so: the growable
 /// deep stack keeps it an explicit refusal, never a `SIGABRT`.
-fn interpreter_for(opts: &RunOptions) -> mycelium_interp::Interpreter {
-    let interp = mycelium_interp::Interpreter::default();
+///
+/// The prim registry is always [`run_prim_registry`] (builtins + optional default host ops), not a
+/// bare [`Interpreter::default`], so host install cannot be accidentally skipped.
+fn interpreter_for(opts: &RunOptions) -> Interpreter {
+    let prims = run_prim_registry();
+    let interp = Interpreter::new(prims, Box::new(IdentitySwapEngine));
     if opts.unbounded {
         interp.with_depth(u32::MAX)
     } else {

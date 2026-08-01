@@ -11,6 +11,14 @@ publish = false
 [lints]
 workspace = true
 
+[features]
+# S-HOST-REGISTRY (WP-4): install the default `@std-sys` wild: host-op table before `myc run`
+# evaluation. On by default so production `myc run` grants floor ops. Disable with
+# `--no-default-features` to compile/test without host-registry (empty wild: table — G2 loud fail).
+# Pulls mycelium-std-sys-host with its own `host-registry` feature (install_default_host_ops).
+default = ["host-registry"]
+host-registry = ["dep:mycelium-std-sys-host"]
+
 [dependencies]
 # Project manifest parsing (M-359) + the content-addressed spore build/registry (M-368/M-732).
 mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "20b8a6d264ac728e81cfe8cd90cec8d2a91370be" }
@@ -19,9 +27,14 @@ mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "283
 mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "2b92f54349eb0d4f67e32e983874df76908b9ab6" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
-mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "487b1e7049ff521b1a6fa33f376245089e7dc1e1" }
+# WP-4 co-dev pin: mycelium-runtime#11 (HostCallRegistry / register_host / has_host / install_host_ops).
+mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "0a284a79573ecfdab3db719c5f76ee9abcd155c1" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "c673fafdd1bcecb713e3560689af6ab152033867" }
+# Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
+# Optional — see feature `host-registry`. Co-dev pin: mycelium-std-sys-host#7 tip (L-HOST).
+# Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.
+mycelium-std-sys-host = { git = "https://github.com/tzervas/mycelium-std-sys-host", rev = "067da5070e0fea796a6ca030c845c140985cab69", optional = true, features = ["host-registry"] }
 
 [[bin]]
 name = "myc"
