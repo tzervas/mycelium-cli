@@ -1,0 +1,256 @@
+# Automated release on merge to main: semver bump -> lockfile -> static build -> GitHub Release.
+#
+# WHY TWO JOBS AND NOT ONE STRAIGHT-LINE RUN
+# `main` carries a ruleset with `pull_request` and `required_status_checks`, so a
+# workflow CANNOT `git push HEAD:main` -- the push is rejected. A one-shot
+# "bump, tag, release" job is therefore impossible here, and it would also be the
+# wrong shape: it would bypass the very checks the ruleset exists to enforce.
+#
+# So this splits along the merge boundary, which is exactly what fleet-propagate.yml
+# already does for rev bumps -- it opens a PR and arms auto-merge, leaving the
+# per-repo required checks as the gate:
+#
+#   propose  (an ordinary merge landed)  -> compute the bump, open a bump PR, arm auto-merge
+#   publish  (the bump PR itself landed) -> build the static binary, tag, cut the Release
+#
+# The `chore(release): ` commit subject is the hand-off between them. It is
+# load-bearing in both directions: `propose` refuses to act on it (which is what
+# breaks the retrigger loop) and `publish` acts only on it.
+#
+# RELATIONSHIP TO release.yml
+# release.yml stays as-is: the deliberate human cut, one dispatch, one tag at an
+# EXACT hand-supplied rev, never the moving branch tip. This adds the routine path.
+# Both keep fresh-tags-only -- an existing tag is a hard refusal, never an
+# overwrite or force-move.
+#
+# WHY A STATIC musl BINARY (measured, not assumed)
+# The glibc build links libc/libm/libgcc_s dynamically, and glibc is forward- but
+# not backward-compatible, so a binary built on Ubuntu latest does NOT run on
+# Debian stable -- both are supported targets. The dependency tree is pure Rust
+# (84 packages; no openssl/ring/libgit2/bindgen), so musl needs no cross C
+# toolchain. Verified 2026-08-03: the musl build is behaviourally identical to the
+# glibc one (init/check/test exit 0; run exits 65 with the same structured
+# error[myc-run-no-entry]) and is 3.95 MB stripped. One artifact then covers
+# Ubuntu, Debian stable and Alpine, which is what makes an installer honest.
+#
+# WHY THE LOCKFILE IS GENERATED HERE AND NOT TRACKED
+# Cargo.lock is not carried in-tree at this phase: fleet-propagate advances `rev =`
+# pins across dozens of repos per wave, invalidating every committed lockfile at
+# once -- observed as `cargo build --locked` failing outright on this repo. Of the
+# 47 crates only 10 produce binaries, so 36 are libraries whose lockfiles Cargo
+# convention says to omit anyway. Reproducibility is recovered where it matters:
+# the lockfile is generated at release time and attached to the Release, so any
+# shipped version stays rebuildable, and --locked only ever runs against a
+# lockfile generated moments earlier so it cannot fail spuriously.
+#
+# SUPPLY CHAIN
+# actions/checkout only -- already used repo-wide. Everything else is git, cargo,
+# gh and curl against this repo's own REST API with the workflow-scoped
+# GITHUB_TOKEN. No third-party action touches the release, matching release.yml.
+name: release-on-merge
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-on-merge
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # An ordinary merge landed on main. Work out whether it warrants a release and,
+  # if so, open the bump PR. Nothing is built here -- building before the bump has
+  # merged would compile a version that may never exist.
+  # ---------------------------------------------------------------------------
+  propose:
+    name: propose a version bump
+    # Quoted: the ': ' inside the literal would otherwise end the YAML scalar.
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore(release): ') }}"
+    runs-on: [self-hosted, linux, x64, podman]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: the bump rule reads commits since the last tag, and a
+          # shallow clone would silently see an empty range and release nothing.
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Compute the next version
+        id: ver
+        run: |
+          set -eu
+          cur=$(awk '/^\[workspace\.package\]/{f=1;next} f&&/^version *=/{gsub(/[" ]/,"");sub(/^version=/,"");print;exit}' Cargo.toml)
+          test -n "$cur" || { echo "::error::could not read [workspace.package] version from Cargo.toml"; exit 1; }
+          chmod +x scripts/semver-bump.sh
+          set +e; next=$(scripts/semver-bump.sh "$cur"); rc=$?; set -e
+          # 3 == nothing releasable (docs/chore-only range). Normal, not a failure.
+          if [ "$rc" = "3" ]; then
+            echo "no releasable commits since the last tag — nothing to propose"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          [ "$rc" = "0" ] || { echo "::error::semver-bump failed (rc=$rc)"; exit 1; }
+          test -n "$next" || { echo "::error::semver-bump exited 0 but printed no version"; exit 1; }
+          echo "cur=$cur"    >> "$GITHUB_OUTPUT"
+          echo "next=$next"  >> "$GITHUB_OUTPUT"
+          echo "tag=v$next"  >> "$GITHUB_OUTPUT"
+          echo "skip=false"  >> "$GITHUB_OUTPUT"
+
+      # Fresh-tags-only, checked before opening a PR so a doomed bump is never proposed.
+      - name: Refuse if the tag already exists
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          set -eu
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}")
+          if [ "$code" = "200" ]; then
+            echo "::error::tag ${TAG} already exists — this workflow never overwrites a tag"; exit 1
+          fi
+          test "$code" = "404" || { echo "::error::unexpected HTTP $code probing tag ${TAG}"; exit 1; }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+
+      - name: Open the bump PR and arm auto-merge
+        if: steps.ver.outputs.skip != 'true'
+        run: |
+          set -eu
+          br="chore/release-${TAG}"
+          # Idempotent: a rerun on the same base must not fail on an existing branch.
+          if git ls-remote --exit-code --heads origin "$br" >/dev/null 2>&1; then
+            echo "branch $br already exists — a bump for ${TAG} is already in flight"; exit 0
+          fi
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q -b "$br"
+          # Only [workspace.package].version. Member crates use
+          # `version.workspace = true`, so this single edit moves the whole train;
+          # a blunt repo-wide substitution would also rewrite dependency requirements.
+          awk -v new="$NEXT" '
+            /^\[workspace\.package\]/ {inws=1; print; next}
+            /^\[/ && !/^\[workspace\.package\]/ {inws=0}
+            inws && /^version *=/ {print "version = \"" new "\""; done=1; next}
+            {print}
+            END {if (!done) exit 1}
+          ' Cargo.toml > Cargo.toml.new || { echo "::error::no version line found under [workspace.package]"; exit 1; }
+          mv Cargo.toml.new Cargo.toml
+          got=$(awk '/^\[workspace\.package\]/{f=1;next} f&&/^version *=/{gsub(/[" ]/,"");sub(/^version=/,"");print;exit}' Cargo.toml)
+          test "$got" = "$NEXT" || { echo "::error::version readback was '$got', expected '$NEXT'"; exit 1; }
+          git add Cargo.toml
+          # 'chore(release): ' is what the publish job triggers on and what propose
+          # refuses to act on. Do not reword it without changing both.
+          git commit -q -m "chore(release): ${TAG}" -m "Automated by release-on-merge. ${CUR} -> ${NEXT}."
+          git push -q origin "$br"
+          gh pr create --repo "${GITHUB_REPOSITORY}" --base main --head "$br" \
+            --title "chore(release): ${TAG}" \
+            --body "$(printf 'Automated version bump proposed by release-on-merge.\n\n`%s` -> `%s`\n\nMerging this cuts tag `%s`, builds the static musl binary and publishes the GitHub Release. The required status checks on `main` remain the gate.\n' "${CUR}" "${NEXT}" "${TAG}")"
+          # Auto-merge, so no human sits between a green merge and its release. If
+          # auto-merge is not enabled on the repo this is a loud failure, not a
+          # silent one -- the PR still exists and can be merged by hand.
+          gh pr merge --repo "${GITHUB_REPOSITORY}" --squash --auto "$br" \
+            || echo "::warning title=auto-merge unavailable::PR opened but auto-merge could not be armed; merge it manually to cut ${TAG}"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+          CUR: ${{ steps.ver.outputs.cur }}
+          NEXT: ${{ steps.ver.outputs.next }}
+
+  # ---------------------------------------------------------------------------
+  # The bump PR merged. The version in main is now the one to ship, so build it,
+  # tag it and publish. No push to a protected branch is needed here -- only a tag.
+  # ---------------------------------------------------------------------------
+  publish:
+    name: build and publish the release
+    if: "${{ startsWith(github.event.head_commit.message, 'chore(release): ') }}"
+    runs-on: [self-hosted, linux, x64, podman]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Read the version to ship
+        id: ver
+        run: |
+          set -eu
+          v=$(awk '/^\[workspace\.package\]/{f=1;next} f&&/^version *=/{gsub(/[" ]/,"");sub(/^version=/,"");print;exit}' Cargo.toml)
+          test -n "$v" || { echo "::error::could not read [workspace.package] version"; exit 1; }
+          echo "tag=v$v" >> "$GITHUB_OUTPUT"
+          echo "shipping v$v"
+
+      - name: Refuse if the tag already exists
+        run: |
+          set -eu
+          code=$(curl -sS -o /dev/null -w '%{http_code}' \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/ref/tags/${TAG}")
+          if [ "$code" = "200" ]; then
+            echo "::error::tag ${TAG} already exists — this workflow never overwrites a tag"; exit 1
+          fi
+          test "$code" = "404" || { echo "::error::unexpected HTTP $code probing tag ${TAG}"; exit 1; }
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
+
+      - name: Generate the lockfile and build the static binary
+        run: |
+          set -eu
+          rustup target add x86_64-unknown-linux-musl   # idempotent
+          # generate-lockfile then --locked: fresh by construction, so --locked
+          # guards against mid-build mutation rather than tripping on stale state.
+          cargo generate-lockfile
+          cargo build --release --locked --target x86_64-unknown-linux-musl
+          bin=target/x86_64-unknown-linux-musl/release/myc
+          test -x "$bin" || { echo "::error::expected binary $bin was not produced"; exit 1; }
+          # Fail closed if "static" is not actually true. Shipping a dynamically
+          # linked binary labelled static is the exact portability bug this target
+          # choice exists to prevent, and it would only surface on a user's Debian box.
+          file "$bin" | grep -q 'static' || { echo "::error::$bin is not static: $(file "$bin")"; exit 1; }
+          mkdir -p dist
+          cp "$bin" dist/myc-x86_64-unknown-linux-musl
+          strip dist/myc-x86_64-unknown-linux-musl || true
+          cp Cargo.lock dist/Cargo.lock
+          # Smoke the artifact actually being shipped, not the one left in target/.
+          ( cd "$RUNNER_TEMP" && rm -rf _smoke && mkdir _smoke && cd _smoke \
+            && "$GITHUB_WORKSPACE/dist/myc-x86_64-unknown-linux-musl" init s >/dev/null \
+            && cd s && "$GITHUB_WORKSPACE/dist/myc-x86_64-unknown-linux-musl" check >/dev/null ) \
+            || { echo "::error::the shipped artifact failed its own init+check smoke test"; exit 1; }
+          ( cd dist && sha256sum myc-x86_64-unknown-linux-musl Cargo.lock > SHA256SUMS )
+          cat dist/SHA256SUMS
+
+      - name: Tag the release
+        run: |
+          set -eu
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git tag -a "${TAG}" -m "${TAG}"
+          git push origin "refs/tags/${TAG}"
+        env:
+          TAG: ${{ steps.ver.outputs.tag }}
+
+      - name: Create the Release and upload artifacts
+        run: |
+          set -eu
+          notes=$(printf 'Automated release cut on merge to `main`.\n\n**Artifacts**\n- `myc-x86_64-unknown-linux-musl` — statically linked; one binary for Ubuntu, Debian stable and Alpine\n- `Cargo.lock` — the exact resolved dependency graph for this build, so this version stays rebuildable\n- `SHA256SUMS`\n\nSource-only crate publication remains the posture (ADR-018): nothing is pushed to crates.io.\n')
+          payload=$(printf '%s' "$notes" | python3 -c 'import json,sys; t=sys.argv[1]; print(json.dumps({"tag_name":t,"name":t,"body":sys.stdin.read(),"draft":False,"prerelease":False}))' "${TAG}")
+          resp=$(curl -sS -X POST \
+            -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Accept: application/vnd.github+json" \
+            -d "$payload" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases")
+          id=$(printf '%s' "$resp" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("id",""))')
+          test -n "$id" || { echo "::error::release creation failed: $(printf '%s' "$resp" | head -c 400)"; exit 1; }
+          up="https://uploads.github.com/repos/${GITHUB_REPOSITORY}/releases/${id}/assets"
+          for f in myc-x86_64-unknown-linux-musl Cargo.lock SHA256SUMS; do
+            code=$(curl -sS -o /tmp/upload.out -w '%{http_code}' -X POST \
+              -H "Authorization: Bearer ${GITHUB_TOKEN}" -H "Content-Type: application/octet-stream" \
+              --data-binary "@dist/$f" "${up}?name=${f}")
+            test "$code" = "201" || { echo "::error::upload of $f failed (HTTP $code): $(head -c 300 /tmp/upload.out)"; exit 1; }
+            echo "uploaded $f"
+          done
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.ver.outputs.tag }}
