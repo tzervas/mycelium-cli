@@ -29,13 +29,32 @@ net-host = ["dep:mycelium-std-net"]
 mycelium-proj = { git = "https://github.com/tzervas/mycelium-proj", rev = "ccc1936734875d098fa99cce7570b23f1f6880e3" }
 mycelium-spore = { git = "https://github.com/tzervas/mycelium-spore", rev = "c5d88d90cbdd3b1b2db79715b676c60da9117352" }
 # The L1 front-end: parse + type-check, so `myc check` is a real (not stubbed) verification.
-mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "4e4a29679d8e941eab86fad40f49c9947e68eefd" }
+# Bumped to l1#26 (S-TYPED-PRIM-ENV / S-TYPED-PRIM-CALL-CHECK, PKG-LINKAGE): ships TypedPrimEnv +
+# check_phylum_with_deps_and_prims, the checker-side half of S-CLI-TYPED-PRIM-WIRING below.
+mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "f28a619b39d40db233379bc569016826f527428c" }
 # The trusted reference interpreter (M-908): `myc run` v0 elaborates the checked nodule to closed
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
 # Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
+# NOT bumped alongside mycelium-l1/mycelium-std-io below: mycelium-std-sys-host/mycelium-std-net
+# (the `wild:` host-op providers this crate ALSO depends on) pin `mycelium-interp` at this SAME
+# 7842042 rev for their own `PrimRegistry` shape — bumping this direct pin without also re-pinning
+# those two would create a THIRD, incompatible `mycelium-interp` instance in the graph
+# (`install_default_host_ops(&mut PrimRegistry)` requires the exact same crate instance as
+# `interpreter_for`'s `PrimRegistry::with_builtins()`). This crate's own code never touches
+# `PrimSig`/`TypedPrimRegistry` directly (only `mycelium_l1::TypedPrimEnv::register` does, via
+# `mycelium_std_io::typed_prims::typed_prim_sigs()` — see `install_typed_std`), so it never needs
+# those two `mycelium-interp` instances (this one and the f683712 one mycelium-l1/mycelium-std-io
+# pull in transitively) to be the same Rust type. A future S-CLI-TYPED-PRIM-EVAL-BRIDGE lane MUST
+# re-pin all of {mycelium-interp, mycelium-std-sys-host, mycelium-std-net} to a single unified rev
+# together — never just this one — when it wires `TypedPrimRegistry` into `Interpreter::eval`.
 mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "7842042d770108b2d179ff2874f1871dc4821604" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "28e81b67a5d21bc3bdf8904a6ce36dd9ccb515b9" }
+# A typed-prim PROVIDER crate (S-CLI-TYPED-PRIM-WIRING): ships pure std functions (to_json/
+# from_json/serialize/deserialize) as checked `prim:` entries behind `feature = "typed-prims"`
+# (S-STD-IO-TYPED-PRIMS, std-io#16) rather than the unverified `wild:` FFI floor. `myc` is the
+# first (and so far only) typed-prim consumer/installer — see `install_typed_std` in `src/lib.rs`.
+mycelium-std-io = { git = "https://github.com/tzervas/mycelium-std-io", rev = "be09a7f327b30e6585a8c09bd4f82c68e4f3de4f", features = ["typed-prims"] }
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
 # Optional — see feature `host-registry`. Pin: mycelium-std-sys-host main (process floor + time/rand).
 # Must enable the dep's `host-registry` feature so `install_default_host_ops` is exported.

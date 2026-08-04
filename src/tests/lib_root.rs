@@ -103,6 +103,82 @@ fn check_resolves_the_committed_cross_nodule_fixture_m1024() {
     assert!(report.checked.iter().any(|f| f == "run_multi_nodule.myc"));
 }
 
+// ── S-CLI-TYPED-PRIM-WIRING (PKG-LINKAGE, mycelium-lang#44) ─────────────────────────────────────
+
+/// The committed typed-prim fixture: `tests/fixtures/check-typed-prim-std-io/
+/// {mycelium-proj.toml,main.myc}`.
+fn check_typed_prim_std_io_fixture_manifest() -> PathBuf {
+    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/check-typed-prim-std-io/mycelium-proj.toml")
+}
+
+#[test]
+fn check_resolves_a_typed_prim_use_against_std_io() {
+    // THE deliverable: a pure std function (`mycelium-std-io`'s `serialize::to_json`) is reachable
+    // from `.myc` source through the checked `prim:` door — `myc check` must resolve `use
+    // std_io::serialize.to_json;` (a cross-phylum-shaped `use` against `install_typed_std`'s
+    // `TypedPrimEnv`, never `Phyla`) and structurally verify the call site, going clean.
+    let report = check_project(&check_typed_prim_std_io_fixture_manifest()).expect("walk succeeds");
+    assert!(
+        report.ok(),
+        "the typed-prim fixture must check clean (S-CLI-TYPED-PRIM-WIRING): {:?}",
+        report.failures
+    );
+    assert_eq!(report.checked.len(), 1, "{:?}", report.checked);
+}
+
+#[test]
+fn check_refuses_a_typed_prim_call_with_the_wrong_argument_ty_no_coercion() {
+    // S-TYPED-PRIM-CALL-CHECK is a REAL structural check, not an always-pass stub: `to_json`'s
+    // registered `PrimSig` wants `Bytes`; `0b0010_1010` is `Binary{8}` (RFC-0032 D4) — a structural
+    // mismatch, never silently coerced. Proves `install_typed_std`'s registered signature is what
+    // actually gates the call, not merely that the `use` resolves.
+    let parent = scratch("check-typed-prim-wrong-ty");
+    write_manifest(&parent, "wrongty");
+    std::fs::write(
+        parent.join("main.myc"),
+        "nodule demo;\nuse std_io::serialize.to_json;\n\
+         fn main() => Bytes = to_json(0b0010_1010);\n",
+    )
+    .unwrap();
+    let report = check_project(&parent.join("mycelium-proj.toml")).expect("walk succeeds");
+    assert!(!report.ok(), "a wrong-Ty typed-prim call must be refused");
+    assert_eq!(report.failures.len(), 1);
+    assert!(
+        report.failures[0].message.contains("Binary")
+            && report.failures[0].message.contains("Bytes"),
+        "must name both the expected and actual type: {}",
+        report.failures[0].message
+    );
+}
+
+/// A cross-phylum-shaped `use` (`use dep::a.b.Item`) must not be misrouted through the v0 CLI-level
+/// intra-project nodule guard ([`use_target_nodule_path`]'s `up.phylum.is_some()` early-return):
+/// before that fix, `use std_io::serialize.to_json;` was misread as an intra-project reference to a
+/// local nodule named `serialize`, which never exists, and refused as `myc-run-nodule-unresolved`
+/// before `check_phylum_with_deps_and_prims` (the component that actually knows about
+/// `TypedPrimEnv`) ever ran.
+#[test]
+fn check_does_not_misroute_a_cross_phylum_use_as_an_intra_project_nodule_reference() {
+    let parent = scratch("check-typed-prim-not-misrouted");
+    write_manifest(&parent, "notmisrouted");
+    std::fs::write(
+        parent.join("main.myc"),
+        "nodule demo;\nuse std_io::serialize.to_json;\nfn main() => Bytes = to_json(0x2A);\n",
+    )
+    .unwrap();
+    let report = check_project(&parent.join("mycelium-proj.toml")).expect("walk succeeds");
+    assert!(
+        report
+            .failures
+            .iter()
+            .all(|f| f.code != "myc-run-nodule-unresolved"),
+        "a cross-phylum `use` must never be refused by the intra-project nodule guard: {:?}",
+        report.failures
+    );
+    assert!(report.ok(), "{:?}", report.failures);
+}
+
 #[test]
 fn check_project_is_all_or_nothing_never_a_fabricated_per_nodule_split() {
     // M-1024: `check_phylum` is all-or-nothing — a single `CheckError` for the whole phylum, never

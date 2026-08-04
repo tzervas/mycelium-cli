@@ -47,8 +47,8 @@ use mycelium_l1::ast::{Item, Path as NoduleAstPath};
 use mycelium_l1::lexer::lex;
 use mycelium_l1::token::{Pos, Spanned, Tok};
 use mycelium_l1::{
-    check_nodule, check_phylum, elaborate, parse, CheckError, Nodule, ParseError, Phylum,
-    PhylumEnv, UsePath,
+    check_nodule, check_phylum_with_deps_and_prims, elaborate, parse, CheckError, Nodule,
+    ParseError, Phyla, Phylum, PhylumEnv, TypedPrimEnv, UsePath,
 };
 use mycelium_proj::parse_manifest;
 use mycelium_spore::{build_spore, explain, Spore};
@@ -178,8 +178,9 @@ pub fn build(manifest_path: &Path) -> Result<(Spore, String), Report> {
 /// project into **one phylum** and checks it as a whole via [`assemble_and_check_phylum`] — the same
 /// front half [`run_multi_nodule`] uses — so a cross-nodule `use` resolves exactly as it does under
 /// `myc run` (this fixed a real bug: `myc check` used to refuse every cross-nodule `use` because each
-/// file was checked in isolation, while `myc run` already resolved them). Because [`check_phylum`] is
-/// **all-or-nothing** (one [`CheckError`] for the whole phylum, never a per-nodule verdict), the
+/// file was checked in isolation, while `myc run` already resolved them). Because
+/// [`check_phylum_with_deps_and_prims`] is **all-or-nothing** (one [`CheckError`] for the whole
+/// phylum, never a per-nodule verdict), the
 /// honesty follows through here too (VR-5, mirroring `mycelium-check`'s `PhylumReport`): on success
 /// every source is listed in `checked` (the phylum-wide check that passed necessarily passed all of
 /// them); on failure `checked` stays empty and the single blocking [`Report`] is the only entry in
@@ -208,7 +209,7 @@ impl CheckReport {
 
 /// `myc check` — parse and type-check every `.myc` source under the project directory containing
 /// `manifest_path`, **as one phylum** (M-1024): the same parse → dedup/use-resolve/cycle-guard →
-/// assemble → [`check_phylum`] front half [`run_multi_nodule`] uses, via the shared
+/// assemble → [`check_phylum_with_deps_and_prims`] front half [`run_multi_nodule`] uses, via the shared
 /// [`assemble_and_check_phylum`] seam — so `myc check` and `myc run` resolve cross-nodule references
 /// identically, diverging only *after* assembly (`check` reports the verdict and stops; `run`
 /// additionally finds `main`, links via [`PhylumEnv::link`], and evaluates). This fixes a real
@@ -661,7 +662,10 @@ fn run_multi_nodule(
 }
 
 /// **The shared phylum-assembler seam (M-1024)** — parse every source, run the v0 CLI-level
-/// link-check guards, assemble one header-less [`Phylum`], and [`check_phylum`] it. Both
+/// link-check guards, assemble one header-less [`Phylum`], and check it via
+/// [`check_phylum_with_deps_and_prims`] (S-CLI-TYPED-PRIM-WIRING — see [`install_typed_std`]; a
+/// zero-dependency, zero-typed-prim phylum checks byte-identically to plain `check_phylum`, so this
+/// is additive, not a behavior change for a program with no typed-prim `use`). Both
 /// [`check_project`] (`myc check`) and [`run_multi_nodule`] (`myc run`/`myc build`) call this so the
 /// two commands share ONE assembly + resolution path, diverging only after it (`check` reports the
 /// verdict and stops; `run` additionally finds `main`, links via [`PhylumEnv::link`], and evaluates).
@@ -670,9 +674,9 @@ fn run_multi_nodule(
 ///
 /// Steps: (1) parse every source independently — each file is a bare `nodule <path>; …` block; (2)
 /// the never-silent v0 CLI link-check guards ([`check_no_duplicate_nodule_paths`] /
-/// [`check_use_targets_resolve`] / [`check_no_nodule_cycles`] — G2: [`check_phylum`] does not itself
-/// guard duplicate nodule paths or cyclic `use` graphs, so these run first); (3) assemble one
-/// [`Phylum`] (no header — `path: None`) and [`check_phylum`] it as a whole.
+/// [`check_use_targets_resolve`] / [`check_no_nodule_cycles`] — G2: [`check_phylum_with_deps_and_prims`]
+/// does not itself guard duplicate nodule paths or cyclic `use` graphs, so these run first); (3)
+/// assemble one [`Phylum`] (no header — `path: None`) and check it as a whole.
 ///
 /// # Errors
 /// A located [`Report`] on: an I/O failure (`myc-io`), a parse failure (`myc-parse`), a v0 CLI link
@@ -697,8 +701,9 @@ fn assemble_and_check_phylum(
         parsed.push((rel, nodule));
     }
 
-    // Step 2: link-check before check_phylum (which does not itself guard duplicate nodule paths
-    // or cyclic `use` graphs — G2: never let those corrupt the phylum-wide export table silently).
+    // Step 2: link-check before check_phylum_with_deps_and_prims (which does not itself guard
+    // duplicate nodule paths or cyclic `use` graphs — G2: never let those corrupt the phylum-wide
+    // export table silently).
     check_no_duplicate_nodule_paths(&parsed)?;
     check_use_targets_resolve(&parsed)?;
     check_no_nodule_cycles(&parsed)?;
@@ -708,12 +713,46 @@ fn assemble_and_check_phylum(
         path: None,
         nodules: parsed.iter().map(|(_, n)| n.clone()).collect(),
     };
-    let phylum_env: PhylumEnv = check_phylum(&phylum).map_err(|ce: CheckError| {
-        Report::new("myc-check", ce.to_string(), 65)
-            .help("resolve the type error reported above (see `myc check`)")
-    })?;
+    let prims = install_typed_std();
+    let phylum_env: PhylumEnv =
+        check_phylum_with_deps_and_prims(&phylum, &Phyla::default(), &prims).map_err(
+            |ce: CheckError| {
+                Report::new("myc-check", ce.to_string(), 65)
+                    .help("resolve the type error reported above (see `myc check`)")
+            },
+        )?;
 
     Ok((phylum_env, parsed))
+}
+
+/// **S-CLI-TYPED-PRIM-WIRING (PKG-LINKAGE, mycelium-lang#44).** Populate the checker's side of the
+/// typed-prim install call (`mycelium_l1::TypedPrimEnv`) from every typed-prim PROVIDER crate `myc`
+/// links in — currently just `mycelium-std-io`'s `feature = "typed-prims"` surface
+/// (S-STD-IO-TYPED-PRIMS, std-io#16). This is the checker-side half of the "single install call"
+/// the adversarial checklist requires: the runtime-side half (populating a live
+/// `mycelium_interp::typed::TypedPrimRegistry` for `Interpreter::eval` to dispatch through) is a
+/// SEPARATE, not-yet-landed seam (`mycelium-interp`'s own `typed.rs` docs it as "Not yet wired into
+/// `Interpreter::eval`") — `myc check` gets the typed-prim door open here; `myc run` does not yet,
+/// and that is this function's honest, current scope (never silently overclaimed).
+///
+/// `dep_local_name` is fixed to `"std_io"` (the name a `.myc` program spells in `use
+/// std_io::serialize.to_json;`) and each registered `path` is the provider's own dispatch name
+/// (e.g. `"std.io.serialize.to_json"`) with its crate-namespace prefix (`"std.io."`) stripped, per
+/// `TypedPrimEnv::register`'s own doc example (`"serialize.to_json"` for `mycelium-std-io`'s
+/// `serialize::to_json`) — never a name `myc` invents independently of the provider's own registry.
+#[must_use]
+fn install_typed_std() -> TypedPrimEnv {
+    const DEP_LOCAL_NAME: &str = "std_io";
+    const NAMESPACE_PREFIX: &str = "std.io.";
+
+    let mut prims = TypedPrimEnv::default();
+    for (dispatch_name, sig) in mycelium_std_io::typed_prims::typed_prim_sigs() {
+        let path = dispatch_name
+            .strip_prefix(NAMESPACE_PREFIX)
+            .unwrap_or(dispatch_name);
+        prims.register(DEP_LOCAL_NAME, path, sig);
+    }
+    prims
 }
 
 /// `path`, relative to `project_dir` (falls back to the absolute path if stripping fails — never
@@ -734,10 +773,21 @@ fn nodule_path_string(path: &NoduleAstPath) -> String {
 /// The nodule path a `use` targets: for a glob (`use a.b.*`) the whole path is the nodule; for a
 /// specific import (`use a.b.Item`) the last segment is the imported item, so the nodule is the
 /// prefix. Returns `None` for an unqualified specific `use` (a single-segment, non-glob path) — that
-/// shape is malformed on its own terms and [`check_phylum`] reports it precisely; the M-909 linker
-/// does not duplicate that diagnostic.
+/// shape is malformed on its own terms and [`check_phylum_with_deps_and_prims`] reports it
+/// precisely; the M-909 linker does not duplicate that diagnostic.
+///
+/// Returns `None` for a **cross-phylum** `use dep::a.b.Item` (`up.phylum.is_some()` — DN-113 Rank 1
+/// / S-CLI-TYPED-PRIM-WIRING) too: this v0 CLI-level guard predates cross-phylum `Phyla`/
+/// `TypedPrimEnv` support and only knows this project's OWN intra-project nodule graph (`known` in
+/// [`check_use_targets_resolve`]/[`check_no_nodule_cycles`] is built solely from `parsed`, this
+/// project's own `.myc` sources) — a dependency's or typed-prim provider's nodules are never in
+/// that set, so treating a cross-phylum reference as an intra-project one would always misfire as
+/// "no such nodule" before [`check_phylum_with_deps_and_prims`] (which DOES know about `Phyla`/
+/// `TypedPrimEnv`) ever gets a chance to resolve or refuse it correctly.
 fn use_target_nodule_path(up: &UsePath) -> Option<String> {
-    if up.glob {
+    if up.phylum.is_some() {
+        None
+    } else if up.glob {
         Some(up.path.0.join("."))
     } else if up.path.0.len() >= 2 {
         Some(up.path.0[..up.path.0.len() - 1].join("."))
