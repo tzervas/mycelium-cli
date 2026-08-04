@@ -53,6 +53,15 @@ fn main() -> ExitCode {
     let rest: Vec<String> = args.collect();
 
     match cmd.as_str() {
+        // S-CLI-VERSION-MYC (PKG-INTERP-CORRECTNESS): before any manifest/project-directory
+        // resolution (this whole `match` arm touches no filesystem), so it works from an arbitrary
+        // cwd with no `mycelium-proj.toml` present. STDOUT only, single line — a consumer capturing
+        // only stdout (ap-workflows' `mycelium-version` pin check) is the point; a stderr-only or
+        // multi-line emission would silently fail that substring match.
+        "--version" | "-V" => {
+            println!("{} {}", env!("CARGO_PKG_NAME"), env!("CARGO_PKG_VERSION"));
+            ExitCode::SUCCESS
+        }
         "init" => match rest.as_slice() {
             [name] => match init(Path::new("."), name) {
                 Ok(files) => {

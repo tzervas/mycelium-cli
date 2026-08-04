@@ -1,0 +1,13 @@
+# Committed fixture for S-WILD-DISCLOSURE-CLI (PKG-INTERP-CORRECTNESS): a nullary `main` whose body
+# directly invokes `wild { time_mono_nanos() }`, ascribed to `Unit` — the package's measured
+# "legitimately well-typed v0 program" repro. `myc run` must still exit 0 AND now disclose the
+# wild-boundary trust gap on stderr.
+[project]
+name    = "run_wild_main"
+kind    = "phylum"
+version = "0.1.0"
+license = "MIT"
+summary = "run_wild_main — S-WILD-DISCLOSURE-CLI direct-wild fixture."
+
+[surface]
+exports = ["run_wild_main"]

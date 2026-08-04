@@ -42,6 +42,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::io::Read as StdRead;
 use std::path::{Path, PathBuf};
 
+use mycelium_core::{Alt, CoreValue, Datum, Node};
 use mycelium_interp::{IdentitySwapEngine, Interpreter, PrimRegistry};
 use mycelium_l1::ast::{Item, Path as NoduleAstPath};
 use mycelium_l1::lexer::lex;
@@ -267,6 +268,117 @@ pub fn cert_mode_line_for(manifest: &mycelium_proj::Manifest) -> String {
     mycelium_proj::explain_mode(&mycelium_proj::resolve_mode(&decls))
 }
 
+/// S-RUN-COREVALUE (PKG-INTERP-CORRECTNESS): render an [`Interpreter::eval_core`]
+/// result — a representation [`Value`](mycelium_interp::Value) **or** an algebraic data
+/// [`Datum`] — for `myc run`'s success rendering. The [`CoreValue::Repr`] arm is BYTE-IDENTICAL to
+/// the pre-existing `format!("{value:?}")` rendering `myc run` has always produced (only the
+/// [`CoreValue::Data`] arm is new): changing the `Repr` rendering would silently break any consumer
+/// already parsing `myc run`'s stdout.
+#[must_use]
+pub fn render_core_value(cv: &CoreValue) -> String {
+    match cv {
+        CoreValue::Repr(v) => format!("{v:?}"),
+        CoreValue::Data(d) => render_datum(d),
+    }
+}
+
+/// The nesting depth [`render_datum`] refuses past, rather than growing the host call stack without
+/// bound. `mycelium-core`'s own `datum.rs` deliberately keeps `Datum`/`CoreValue`'s `Clone`/
+/// `PartialEq`/`Drop` manual-iterative for exactly this class of bug (RFC-0041 §4.5 W3) — a naive
+/// recursive `Display`-style renderer would reintroduce it. `myc run`'s v0 rendering only needs to
+/// be honest and crash-free, not unboundedly deep, so a fixed, generous ceiling with an explicit,
+/// located refusal (never a silent truncation, never a host-stack `SIGABRT` — G2) is sufficient
+/// here; a growable-stack renderer mirroring the interpreter's own guard is future work if a real
+/// program is ever found that legitimately nests this deep.
+const RENDER_DATUM_MAX_DEPTH: usize = 512;
+
+/// Content-addressed, recursive rendering of a [`Datum`]: `#<decl-hash>#<index>(field, field, …)`,
+/// using [`Datum::ctor`]'s own [`CtorRef`](mycelium_core::CtorRef) [`Display`](std::fmt::Display)
+/// (`#<hash>#<i>`) and recursing into [`Datum::fields`]. Deliberately never fabricates a
+/// human-readable constructor name: a resolved data declaration carries no surface name post-build
+/// (ADR-003 — "names are not identity"), and `mycelium-l1`'s own `reveal::render_surface` already
+/// documents that no surface spelling survives elaboration to invert a `Construct`'s ctor back to a
+/// name. Human-name resolution is explicitly out of scope here (PKG-INTERP-CORRECTNESS non_goals) —
+/// this content-addressed form is always correct, if not always pretty.
+#[must_use]
+pub fn render_datum(d: &Datum) -> String {
+    render_datum_at(d, 0)
+}
+
+fn render_datum_at(d: &Datum, depth: usize) -> String {
+    if depth >= RENDER_DATUM_MAX_DEPTH {
+        return format!(
+            "{}(...<render depth limit {RENDER_DATUM_MAX_DEPTH} reached — refusing to recurse \
+             further; G2>)",
+            d.ctor()
+        );
+    }
+    let fields = d.fields();
+    if fields.is_empty() {
+        return d.ctor().to_string();
+    }
+    let rendered_fields: Vec<String> = fields
+        .iter()
+        .map(|f| match f {
+            CoreValue::Repr(v) => format!("{v:?}"),
+            CoreValue::Data(inner) => render_datum_at(inner, depth + 1),
+        })
+        .collect();
+    format!("{}({})", d.ctor(), rendered_fields.join(", "))
+}
+
+/// S-WILD-DISCLOSURE-CLI (PKG-INTERP-CORRECTNESS): whether `node` (the elaborated Core IR of a
+/// program's entry point) invokes a `wild` host operation anywhere within it. An EXHAUSTIVE match
+/// over every [`Node`] variant (`Const`/`Var`/`Let`/`Op`/`Swap`/`Construct`/`Match`/`Lam`/`App`/
+/// `Fix`/`FixGroup` — `mycelium-core`'s small, closed KC-3 node grammar) — deliberately no `_ =>
+/// false` catch-all, so a `wild` nested arbitrarily deep (e.g. only inside one `Match` alternative,
+/// or only inside one member of a `FixGroup` reached transitively through a helper function, never
+/// textually inside the walked node's own top level) can never be silently missed. `elab_wild`
+/// emits exactly `format!("wild:{name}")` as a `Node::Op`'s `prim` (`mycelium-l1`'s `elab.rs`), so a
+/// `starts_with("wild:")` check on `Op::prim` is sufficient — no new IR field is needed.
+#[must_use]
+pub fn contains_wild(node: &Node) -> bool {
+    match node {
+        Node::Const(_) | Node::Var(_) => false,
+        Node::Let { bound, body, .. } => contains_wild(bound) || contains_wild(body),
+        Node::Op { prim, args } => prim.starts_with("wild:") || args.iter().any(contains_wild),
+        Node::Swap { src, .. } => contains_wild(src),
+        Node::Construct { args, .. } => args.iter().any(contains_wild),
+        Node::Match {
+            scrutinee,
+            alts,
+            default,
+        } => {
+            contains_wild(scrutinee)
+                || alts.iter().any(|alt| match alt {
+                    Alt::Ctor { body, .. } | Alt::Lit { body, .. } => contains_wild(body),
+                })
+                || default.as_deref().is_some_and(contains_wild)
+        }
+        Node::Lam { body, .. } => contains_wild(body),
+        Node::App { func, arg } => contains_wild(func) || contains_wild(arg),
+        Node::Fix { body, .. } => contains_wild(body),
+        Node::FixGroup { defs, body } => {
+            defs.iter().any(|(_, d)| contains_wild(d)) || contains_wild(body)
+        }
+    }
+}
+
+/// S-WILD-DISCLOSURE-CLI (PKG-INTERP-CORRECTNESS): the unconditional, never-silent disclosure
+/// printed to stderr (mirroring the existing [`cert_mode_line_for`] "always-print" precedent,
+/// design-steer P3-Q3a) whenever [`contains_wild`] is true for the node about to be evaluated. The
+/// wild-boundary result type is trusted, not verified against what the host operation actually
+/// returns (ADR-014/VR-5) — this stays true by design for v0; the wording below states plainly what
+/// is NOT checked and never implies verification now happens (a reassuring-sounding but false
+/// message would itself be exactly the silent-wrong-type risk this exists to disclose).
+#[must_use]
+pub fn wild_boundary_banner() -> &'static str {
+    "myc: NOTE — this program invokes `wild` host operation(s); their declared result type(s) are \
+     AUDITED, not statically or dynamically verified against what the host operation actually \
+     returns (ADR-014/VR-5) — a host op returning a different type than declared will not be \
+     caught by `check` or `run`."
+}
+
 /// The outcome of a successful `myc run` (M-908/M-909): which source ran, which entry function was
 /// executed, and a rendering of the interpreter's result.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -277,9 +389,11 @@ pub struct RunReport {
     pub source: String,
     /// The entry function name that was executed (v0 convention: `main`).
     pub entry: String,
-    /// A `{:?}`-rendered form of the interpreter's result value (`Declared` — a v0 debug rendering,
-    /// not a stable/parseable format; a dedicated value-printer is follow-up work, not silently
-    /// approximated here).
+    /// A rendered form of the interpreter's `eval_core` result ([`render_core_value`];
+    /// S-RUN-COREVALUE): a representation value renders as its pre-existing `{:?}` Debug dump
+    /// (unchanged), an algebraic data value renders content-addressed via [`render_datum`]
+    /// (`Declared` — a v0 debug rendering, not a stable/parseable format; a dedicated
+    /// human-readable value-printer is follow-up work, not silently approximated here).
     pub rendered: String,
     /// The active `CertMode`'s single, stable disclosure line (design-steer P3-Q3a). Set once, by
     /// [`run_with_options`], after the single-/multi-nodule path returns — see
@@ -578,8 +692,18 @@ fn run_single_nodule(
             )
     })?;
 
+    // S-WILD-DISCLOSURE-CLI: unconditional, never-silent disclosure — right after `elaborate()`
+    // succeeds and before evaluation — that this program's wild-boundary result type(s) are
+    // trusted, never verified (ADR-014/VR-5). Absent entirely for a wild-free program.
+    if contains_wild(&node) {
+        eprintln!("{}", wild_boundary_banner());
+    }
+
+    // S-RUN-COREVALUE: `eval_core` (not `eval`) so a program whose `main` evaluates to an algebraic
+    // data value is rendered, not refused with `EvalError::DataResult` (the `Repr` rendering below
+    // stays byte-identical to before — only the `Data` arm `render_core_value` adds is new).
     let interp = interpreter_for(opts);
-    let value = interp.eval(&node).map_err(|ee| {
+    let value = interp.eval_core(&node).map_err(|ee| {
         Report::new("myc-run-eval", ee.to_string(), 65)
             .at(rel.clone())
             .help("the program failed during interpreted evaluation — see the error above")
@@ -588,7 +712,7 @@ fn run_single_nodule(
     Ok(RunReport {
         source: rel,
         entry: ENTRY.to_owned(),
-        rendered: format!("{value:?}"),
+        rendered: render_core_value(&value),
         // Set by `run_with_options` after this returns (it holds the resolved manifest).
         cert_mode_line: String::new(),
     })
@@ -644,8 +768,15 @@ fn run_multi_nodule(
             )
     })?;
 
+    // S-WILD-DISCLOSURE-CLI: same unconditional disclosure as the single-nodule path, right after
+    // `elaborate()` succeeds and before evaluation.
+    if contains_wild(&node) {
+        eprintln!("{}", wild_boundary_banner());
+    }
+
+    // S-RUN-COREVALUE: `eval_core` (not `eval`) — see `run_single_nodule`'s matching comment.
     let interp = interpreter_for(opts);
-    let value = interp.eval(&node).map_err(|ee| {
+    let value = interp.eval_core(&node).map_err(|ee| {
         Report::new("myc-run-eval", ee.to_string(), 65)
             .at(entry_rel.clone())
             .help("the program failed during interpreted evaluation — see the error above")
@@ -654,7 +785,7 @@ fn run_multi_nodule(
     Ok(RunReport {
         source: entry_rel,
         entry: ENTRY.to_owned(),
-        rendered: format!("{value:?}"),
+        rendered: render_core_value(&value),
         // Set by `run_with_options` after this returns (it holds the resolved manifest).
         cert_mode_line: String::new(),
     })

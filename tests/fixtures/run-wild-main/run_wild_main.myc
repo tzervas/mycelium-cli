@@ -1,0 +1,9 @@
+// nodule: run_wild_main
+// @summary: S-WILD-DISCLOSURE-CLI fixture (PKG-INTERP-CORRECTNESS) — the measured baseline repro:
+// `nodule proj @std-sys; fn main() => Unit !{ffi} = (wild { time_mono_nanos() }) : Unit;`. This
+// remains a legitimately well-typed v0 program (ADR-014) — `myc run` must exit 0 — but the
+// wild-boundary result type (`Unit`, ascribed) is never verified against what `time_mono_nanos`
+// actually returns, so `myc run` must now disclose that trust gap on stderr (never silent).
+nodule run_wild_main @std-sys;
+
+fn main() => Unit !{ffi} = (wild { time_mono_nanos() }) : Unit;

@@ -175,12 +175,12 @@ dependencies = [
 [[package]]
 name = "mycelium-cert"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1#487b1e7049ff521b1a6fa33f376245089e7dc1e1"
+source = "git+https://github.com/tzervas/mycelium-runtime?rev=7842042d770108b2d179ff2874f1871dc4821604#7842042d770108b2d179ff2874f1871dc4821604"
 dependencies = [
  "blake3",
  "mycelium-core",
  "mycelium-diag",
- "mycelium-interp 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1)",
+ "mycelium-interp",
  "mycelium-numerics",
  "mycelium-vsa",
  "serde",
@@ -192,7 +192,8 @@ name = "mycelium-cli"
 version = "0.464.0"
 dependencies = [
  "mycelium-cli-common",
- "mycelium-interp 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177)",
+ "mycelium-core",
+ "mycelium-interp",
  "mycelium-l1",
  "mycelium-proj",
  "mycelium-spore",
@@ -203,12 +204,12 @@ dependencies = [
 [[package]]
 name = "mycelium-cli-common"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-cli-common?rev=c673fafdd1bcecb713e3560689af6ab152033867#c673fafdd1bcecb713e3560689af6ab152033867"
+source = "git+https://github.com/tzervas/mycelium-cli-common?rev=28e81b67a5d21bc3bdf8904a6ce36dd9ccb515b9#28e81b67a5d21bc3bdf8904a6ce36dd9ccb515b9"
 
 [[package]]
 name = "mycelium-core"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-core?rev=46d2515cbd86d2ae4d1365f4adcd2796737e9f0b#46d2515cbd86d2ae4d1365f4adcd2796737e9f0b"
+source = "git+https://github.com/tzervas/mycelium-core?rev=57ef45b453eef1f02bdfb1f0cad1034dabd32b1f#57ef45b453eef1f02bdfb1f0cad1034dabd32b1f"
 dependencies = [
  "blake3",
  "serde",
@@ -217,7 +218,7 @@ dependencies = [
 [[package]]
 name = "mycelium-dense"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-value?rev=6d230ad2023a716704c697ac6812a2062624b4eb#6d230ad2023a716704c697ac6812a2062624b4eb"
+source = "git+https://github.com/tzervas/mycelium-value?rev=fd4c3b307918fe6d58251a0b24a81e9f384d65ba#fd4c3b307918fe6d58251a0b24a81e9f384d65ba"
 dependencies = [
  "mycelium-core",
 ]
@@ -225,7 +226,7 @@ dependencies = [
 [[package]]
 name = "mycelium-diag"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1#487b1e7049ff521b1a6fa33f376245089e7dc1e1"
+source = "git+https://github.com/tzervas/mycelium-runtime?rev=7842042d770108b2d179ff2874f1871dc4821604#7842042d770108b2d179ff2874f1871dc4821604"
 dependencies = [
  "blake3",
  "mycelium-core",
@@ -236,27 +237,13 @@ dependencies = [
 [[package]]
 name = "mycelium-interp"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1#487b1e7049ff521b1a6fa33f376245089e7dc1e1"
+source = "git+https://github.com/tzervas/mycelium-runtime?rev=7842042d770108b2d179ff2874f1871dc4821604#7842042d770108b2d179ff2874f1871dc4821604"
 dependencies = [
  "blake3",
  "mycelium-core",
  "mycelium-dense",
  "mycelium-numerics",
- "mycelium-sched 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1)",
- "mycelium-vsa",
- "mycelium-workstack",
-]
-
-[[package]]
-name = "mycelium-interp"
-version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177#cb3a96348f718661dbd3db43224a036df272e177"
-dependencies = [
- "blake3",
- "mycelium-core",
- "mycelium-dense",
- "mycelium-numerics",
- "mycelium-sched 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177)",
+ "mycelium-sched",
  "mycelium-vsa",
  "mycelium-workstack",
 ]
@@ -264,12 +251,12 @@ dependencies = [
 [[package]]
 name = "mycelium-l1"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-l1?rev=2b92f54349eb0d4f67e32e983874df76908b9ab6#2b92f54349eb0d4f67e32e983874df76908b9ab6"
+source = "git+https://github.com/tzervas/mycelium-l1?rev=4e4a29679d8e941eab86fad40f49c9947e68eefd#4e4a29679d8e941eab86fad40f49c9947e68eefd"
 dependencies = [
  "mycelium-cert",
  "mycelium-core",
  "mycelium-diag",
- "mycelium-interp 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1)",
+ "mycelium-interp",
  "mycelium-select",
  "mycelium-stack",
  "mycelium-workstack",
@@ -278,7 +265,7 @@ dependencies = [
 [[package]]
 name = "mycelium-numerics"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-value?rev=6d230ad2023a716704c697ac6812a2062624b4eb#6d230ad2023a716704c697ac6812a2062624b4eb"
+source = "git+https://github.com/tzervas/mycelium-value?rev=fd4c3b307918fe6d58251a0b24a81e9f384d65ba#fd4c3b307918fe6d58251a0b24a81e9f384d65ba"
 dependencies = [
  "mycelium-core",
  "serde",
@@ -287,7 +274,7 @@ dependencies = [
 [[package]]
 name = "mycelium-proj"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-proj?rev=20b8a6d264ac728e81cfe8cd90cec8d2a91370be#20b8a6d264ac728e81cfe8cd90cec8d2a91370be"
+source = "git+https://github.com/tzervas/mycelium-proj?rev=ccc1936734875d098fa99cce7570b23f1f6880e3#ccc1936734875d098fa99cce7570b23f1f6880e3"
 dependencies = [
  "mycelium-core",
  "mycelium-l1",
@@ -296,15 +283,7 @@ dependencies = [
 [[package]]
 name = "mycelium-sched"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1#487b1e7049ff521b1a6fa33f376245089e7dc1e1"
-dependencies = [
- "mycelium-core",
-]
-
-[[package]]
-name = "mycelium-sched"
-version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177#cb3a96348f718661dbd3db43224a036df272e177"
+source = "git+https://github.com/tzervas/mycelium-runtime?rev=7842042d770108b2d179ff2874f1871dc4821604#7842042d770108b2d179ff2874f1871dc4821604"
 dependencies = [
  "mycelium-core",
 ]
@@ -312,7 +291,7 @@ dependencies = [
 [[package]]
 name = "mycelium-select"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-runtime?rev=487b1e7049ff521b1a6fa33f376245089e7dc1e1#487b1e7049ff521b1a6fa33f376245089e7dc1e1"
+source = "git+https://github.com/tzervas/mycelium-runtime?rev=7842042d770108b2d179ff2874f1871dc4821604#7842042d770108b2d179ff2874f1871dc4821604"
 dependencies = [
  "mycelium-core",
  "serde",
@@ -322,7 +301,7 @@ dependencies = [
 [[package]]
 name = "mycelium-spore"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-spore?rev=283f9fd901607841d5302d5935d15d873a32eef7#283f9fd901607841d5302d5935d15d873a32eef7"
+source = "git+https://github.com/tzervas/mycelium-spore?rev=c5d88d90cbdd3b1b2db79715b676c60da9117352#c5d88d90cbdd3b1b2db79715b676c60da9117352"
 dependencies = [
  "blake3",
  "mycelium-core",
@@ -332,7 +311,7 @@ dependencies = [
 [[package]]
 name = "mycelium-stack"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-core?rev=46d2515cbd86d2ae4d1365f4adcd2796737e9f0b#46d2515cbd86d2ae4d1365f4adcd2796737e9f0b"
+source = "git+https://github.com/tzervas/mycelium-core?rev=57ef45b453eef1f02bdfb1f0cad1034dabd32b1f#57ef45b453eef1f02bdfb1f0cad1034dabd32b1f"
 dependencies = [
  "stacker",
 ]
@@ -340,7 +319,7 @@ dependencies = [
 [[package]]
 name = "mycelium-std-core"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-core?rev=376762cc17853e1582684ececf9e760426bcfb0c#376762cc17853e1582684ececf9e760426bcfb0c"
+source = "git+https://github.com/tzervas/mycelium-std-core?rev=19398dfd847eb9a5fc518149a714d7646abbb316#19398dfd847eb9a5fc518149a714d7646abbb316"
 dependencies = [
  "mycelium-core",
 ]
@@ -348,17 +327,17 @@ dependencies = [
 [[package]]
 name = "mycelium-std-net"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-net?rev=c452977c996b61ca1a811e7662d360500cf77d4b#c452977c996b61ca1a811e7662d360500cf77d4b"
+source = "git+https://github.com/tzervas/mycelium-std-net?rev=13de906a9d1b750b16660c00998778e1c95d7721#13de906a9d1b750b16660c00998778e1c95d7721"
 dependencies = [
  "mycelium-core",
- "mycelium-interp 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177)",
+ "mycelium-interp",
  "ureq",
 ]
 
 [[package]]
 name = "mycelium-std-rand"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-rand?rev=088256c5f29031e487cb7a335cbc9ff29794b58d#088256c5f29031e487cb7a335cbc9ff29794b58d"
+source = "git+https://github.com/tzervas/mycelium-std-rand?rev=9db6ec950d73fd44e38cd6fe5ca9565ec3be441d#9db6ec950d73fd44e38cd6fe5ca9565ec3be441d"
 dependencies = [
  "mycelium-core",
  "mycelium-std-core",
@@ -367,15 +346,15 @@ dependencies = [
 [[package]]
 name = "mycelium-std-sys"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-sys?rev=0de74f60cdd26c25db6704c64f17f08fca0c52af#0de74f60cdd26c25db6704c64f17f08fca0c52af"
+source = "git+https://github.com/tzervas/mycelium-std-sys?rev=4f4a636540e070b0b1ce4cd39bc6bf80316f38db#4f4a636540e070b0b1ce4cd39bc6bf80316f38db"
 
 [[package]]
 name = "mycelium-std-sys-host"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-sys-host?rev=e2ff385a527271126bd7b86a0041f5c6fc747b03#e2ff385a527271126bd7b86a0041f5c6fc747b03"
+source = "git+https://github.com/tzervas/mycelium-std-sys-host?rev=b03043df2e0328e47cb8bf01a91e8d28b9254c79#b03043df2e0328e47cb8bf01a91e8d28b9254c79"
 dependencies = [
  "mycelium-core",
- "mycelium-interp 0.464.0 (git+https://github.com/tzervas/mycelium-runtime?rev=cb3a96348f718661dbd3db43224a036df272e177)",
+ "mycelium-interp",
  "mycelium-std-rand",
  "mycelium-std-sys",
  "mycelium-std-time",
@@ -384,7 +363,7 @@ dependencies = [
 [[package]]
 name = "mycelium-std-time"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-std-time?rev=47ef9e7ec4143c97878083ca5c15930a21eeed83#47ef9e7ec4143c97878083ca5c15930a21eeed83"
+source = "git+https://github.com/tzervas/mycelium-std-time?rev=180f148134cc8d0750ddf68ca612418c7a4d3713#180f148134cc8d0750ddf68ca612418c7a4d3713"
 dependencies = [
  "mycelium-core",
  "mycelium-std-core",
@@ -393,7 +372,7 @@ dependencies = [
 [[package]]
 name = "mycelium-vsa"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-value?rev=6d230ad2023a716704c697ac6812a2062624b4eb#6d230ad2023a716704c697ac6812a2062624b4eb"
+source = "git+https://github.com/tzervas/mycelium-value?rev=fd4c3b307918fe6d58251a0b24a81e9f384d65ba#fd4c3b307918fe6d58251a0b24a81e9f384d65ba"
 dependencies = [
  "mycelium-core",
 ]
@@ -401,7 +380,7 @@ dependencies = [
 [[package]]
 name = "mycelium-workstack"
 version = "0.464.0"
-source = "git+https://github.com/tzervas/mycelium-core?rev=46d2515cbd86d2ae4d1365f4adcd2796737e9f0b#46d2515cbd86d2ae4d1365f4adcd2796737e9f0b"
+source = "git+https://github.com/tzervas/mycelium-core?rev=57ef45b453eef1f02bdfb1f0cad1034dabd32b1f#57ef45b453eef1f02bdfb1f0cad1034dabd32b1f"
 dependencies = [
  "mycelium-stack",
 ]

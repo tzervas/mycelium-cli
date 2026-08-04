@@ -1,0 +1,11 @@
+// nodule: run_data_nested
+// @summary: S-RUN-COREVALUE fixture (PKG-INTERP-CORRECTNESS) — `main` returns `Out(In(1), 2)`, a
+// two-level nested `Datum` (an `Outer` whose first field is itself an `Inner` data value, plus a
+// plain `Binary{8}` representation field) — exercises `render_datum`'s recursive arm, not just the
+// empty-fields nullary-constructor path.
+nodule run_data_nested;
+
+type Inner = In(Binary{8});
+type Outer = Out(Inner, Binary{8});
+
+fn main() => Outer = Out(In(0b0000_0001), 0b0000_0010);
