@@ -17,6 +17,22 @@
 # load-bearing in both directions: `propose` refuses to act on it (which is what
 # breaks the retrigger loop) and `publish` acts only on it.
 #
+# WHY THE BUMP PR IS OPENED WITH A PAT, NOT THE DEFAULT GITHUB_TOKEN
+# GitHub suppresses workflow-run triggering for anything the default GITHUB_TOKEN
+# does, to stop a workflow from recursively re-triggering itself. That suppression
+# is not limited to `push`: a `pull_request` (opened/synchronize/reopened) created
+# by a GITHUB_TOKEN-driven workflow lands in an approval-required state, so
+# `fleet-ci`/`fleet-security` would sit waiting for a human to click "Approve
+# workflows to run" on every single bump PR -- and even past that, the eventual
+# squash-merge push to `main` would itself be GITHUB_TOKEN-attributed and would
+# NOT fire this workflow's own `on: push`, so `publish` would simply never run.
+# Both failure modes are silent-looking (the PR sits open, or main advances with
+# no release) rather than a loud error. `RELEASE_AUTOMATION_TOKEN` (a PAT or
+# GitHub App installation token with contents:write + pull_requests:write on this
+# repo) is required for exactly the `gh pr create`/`gh pr merge --auto` calls
+# below, mirroring mycelium-lang's `FLEET_PROPAGATE_TOKEN` for the same reason.
+# Missing, this refuses loudly rather than opening a PR that can never self-merge.
+#
 # RELATIONSHIP TO release.yml
 # release.yml stays as-is: the deliberate human cut, one dispatch, one tag at an
 # EXACT hand-supplied rev, never the moving branch tip. This adds the routine path.
@@ -45,8 +61,11 @@
 #
 # SUPPLY CHAIN
 # actions/checkout only -- already used repo-wide. Everything else is git, cargo,
-# gh and curl against this repo's own REST API with the workflow-scoped
-# GITHUB_TOKEN. No third-party action touches the release, matching release.yml.
+# gh and curl against this repo's own REST API. No third-party action touches the
+# release, matching release.yml. Most calls use the workflow-scoped GITHUB_TOKEN;
+# the two calls that open/merge the bump PR use secrets.RELEASE_AUTOMATION_TOKEN
+# instead (see "WHY THE BUMP PR IS OPENED WITH A PAT" above) -- that secret must
+# be provisioned on this repo before `propose` can run end to end.
 name: release-on-merge
 
 on:
@@ -116,6 +135,29 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.ver.outputs.tag }}
 
+      # Never-silent: without this token the PR that follows would sit with its
+      # checks unapproved and, even merged by hand, its push to main would not
+      # trigger `publish` -- both look like "nothing happened", not a failure.
+      - name: Require the release-automation token
+        if: steps.ver.outputs.skip != 'true'
+        env:
+          RELEASE_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
+        run: |
+          set -eu
+          if [ -z "${RELEASE_TOKEN}" ]; then
+            echo "::error::secret RELEASE_AUTOMATION_TOKEN is not set. Opening/merging"
+            echo "::error::the bump PR with the default GITHUB_TOKEN would run its"
+            echo "::error::required checks in an approval-required state and its merge"
+            echo "::error::would not trigger this workflow's publish job (GitHub"
+            echo "::error::suppresses workflow runs triggered by GITHUB_TOKEN)."
+            echo "::error::Create a PAT or GitHub App installation token with"
+            echo "::error::contents:write + pull_requests:write on this repo and add it"
+            echo "::error::as RELEASE_AUTOMATION_TOKEN (mirrors mycelium-lang's"
+            echo "::error::FLEET_PROPAGATE_TOKEN). Refusing rather than proposing a"
+            echo "::error::release that can never complete itself."
+            exit 1
+          fi
+
       - name: Open the bump PR and arm auto-merge
         if: steps.ver.outputs.skip != 'true'
         run: |
@@ -155,7 +197,12 @@ jobs:
           gh pr merge --repo "${GITHUB_REPOSITORY}" --squash --auto "$br" \
             || echo "::warning title=auto-merge unavailable::PR opened but auto-merge could not be armed; merge it manually to cut ${TAG}"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # GH_TOKEN (not GITHUB_TOKEN): `gh pr create`/`gh pr merge` must run as
+          # the PAT here, not the default token -- see "WHY THE BUMP PR IS OPENED
+          # WITH A PAT" at the top of this file. The `git push` of the bump branch
+          # a few lines up rides on actions/checkout's persisted GITHUB_TOKEN
+          # credential, which is fine: that push doesn't need to trigger anything.
+          GH_TOKEN: ${{ secrets.RELEASE_AUTOMATION_TOKEN }}
           TAG: ${{ steps.ver.outputs.tag }}
           CUR: ${{ steps.ver.outputs.cur }}
           NEXT: ${{ steps.ver.outputs.next }}
@@ -200,7 +247,15 @@ jobs:
       - name: Generate the lockfile and build the static binary
         run: |
           set -eu
-          rustup target add x86_64-unknown-linux-musl   # idempotent
+          # Egress on this fleet is deny-by-default (no job-time downloads), so
+          # this must not attempt to fetch the musl target here -- it has to
+          # already be baked into the runner image (see ap-workflows'
+          # images/runner-rust/Containerfile, which adds it at image-build time
+          # for exactly this reason). Assert presence and fail closed rather than
+          # gambling on `rustup target add` either hanging against denied egress
+          # or silently succeeding because some other allowance exists.
+          rustup target list --installed | grep -qx x86_64-unknown-linux-musl \
+            || { echo "::error::x86_64-unknown-linux-musl is not installed on this runner. Egress here is deny-by-default -- bake the target into the runner image rather than fetching it at job time (see ap-workflows images/runner-rust/Containerfile)."; exit 1; }
           # generate-lockfile then --locked: fresh by construction, so --locked
           # guards against mid-build mutation rather than tripping on stale state.
           cargo generate-lockfile
