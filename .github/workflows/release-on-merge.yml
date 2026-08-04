@@ -183,7 +183,17 @@ jobs:
           mv Cargo.toml.new Cargo.toml
           got=$(awk '/^\[workspace\.package\]/{f=1;next} f&&/^version *=/{gsub(/[" ]/,"");sub(/^version=/,"");print;exit}' Cargo.toml)
           test "$got" = "$NEXT" || { echo "::error::version readback was '$got', expected '$NEXT'"; exit 1; }
-          git add Cargo.toml
+          # Cargo.lock IS tracked in this repo (checked: unlike the "not tracked
+          # across the train" assumption this workflow was designed under, every
+          # workspace member's own [[package]] entry here embeds a version
+          # number). Left untouched, the tracked lockfile would silently fall one
+          # bump behind Cargo.toml starting with the very first automated
+          # release and never catch back up. Regenerate it in the same commit --
+          # existing git+https rev pins are untouched by this, only the
+          # workspace members' own version fields change -- matching what the
+          # publish job already does successfully on this same runner class.
+          cargo generate-lockfile
+          git add Cargo.toml Cargo.lock
           # 'chore(release): ' is what the publish job triggers on and what propose
           # refuses to act on. Do not reword it without changing both.
           git commit -q -m "chore(release): ${TAG}" -m "Automated by release-on-merge. ${CUR} -> ${NEXT}."
