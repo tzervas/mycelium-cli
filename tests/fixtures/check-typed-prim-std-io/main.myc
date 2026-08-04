@@ -1,0 +1,9 @@
+// nodule: demo
+// @summary: S-CLI-TYPED-PRIM-WIRING fixture — a pure std function (mycelium-std-io's
+// serialize::to_json, registered as a typed prim) called from `.myc` source through the checked
+// `prim:` door, never `wild:` and never gated behind `@std-sys` (a typed-prim call needs neither).
+nodule demo;
+
+use std_io::serialize.to_json;
+
+fn main() => Bytes = to_json(0x2A);

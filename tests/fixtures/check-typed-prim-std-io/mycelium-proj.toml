@@ -1,0 +1,15 @@
+# Committed fixture for S-CLI-TYPED-PRIM-WIRING (PKG-LINKAGE, mycelium-lang#44). A minimal
+# phylum whose `main` calls a pure std function (`mycelium-std-io`'s `serialize::to_json`, exposed
+# via the "typed-prims" feature — S-STD-IO-TYPED-PRIMS, std-io#16) through the checked `prim:`
+# door rather than the unverified `wild:` FFI floor. Proves `myc check` resolves `use
+# std_io::serialize.to_json;` and structurally verifies the call site against the provider's
+# registered `PrimSig` (see `install_typed_std` in `src/lib.rs`) — never a silent skip (G2).
+[project]
+name    = "check_typed_prim_std_io"
+kind    = "phylum"
+version = "0.1.0"
+license = "MIT"
+summary = "check_typed_prim_std_io — S-CLI-TYPED-PRIM-WIRING fixture: a pure std fn reachable from .myc."
+
+[surface]
+exports = ["check_typed_prim_std_io"]
