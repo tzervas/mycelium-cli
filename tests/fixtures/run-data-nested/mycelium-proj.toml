@@ -1,0 +1,13 @@
+# Committed fixture for S-RUN-COREVALUE's `render_datum` recursion (PKG-INTERP-CORRECTNESS): `main`
+# returns a two-level nested algebraic data value (a `Datum` field holding another `Datum`) so the
+# recursive rendering path (not just the empty-fields nullary-constructor path `run-unit-main`
+# exercises) runs end-to-end.
+[project]
+name    = "run_data_nested"
+kind    = "phylum"
+version = "0.1.0"
+license = "MIT"
+summary = "run_data_nested — S-RUN-COREVALUE nested-Datum rendering fixture."
+
+[surface]
+exports = ["run_data_nested"]

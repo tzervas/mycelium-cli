@@ -1,0 +1,10 @@
+// nodule: run_wild_transitive
+// @summary: S-WILD-DISCLOSURE-CLI adversarial fixture (PKG-INTERP-CORRECTNESS) — `main` itself
+// contains no `wild` textually; it only calls `helper()`, whose body is the `wild` block. Pins that
+// `contains_wild`'s walk over the ELABORATED Node (where the call is inlined/reduced through
+// App/Fix, not the surface AST) still finds the `wild:` op and the banner still fires.
+nodule run_wild_transitive @std-sys;
+
+fn helper() => Unit !{ffi} = (wild { time_mono_nanos() }) : Unit;
+
+fn main() => Unit !{ffi} = helper();

@@ -1,0 +1,13 @@
+# Committed fixture for S-WILD-DISCLOSURE-CLI's `contains_wild` exhaustiveness (PKG-INTERP-
+# CORRECTNESS adversarial checklist): the only `wild` call is inside a `helper()` function `main`
+# calls — NOT textually inside `main`'s own top-level body — so this pins that the disclosure walk
+# follows the elaborated Node through a function call (App/Fix), not just `main`'s syntactic surface.
+[project]
+name    = "run_wild_transitive"
+kind    = "phylum"
+version = "0.1.0"
+license = "MIT"
+summary = "run_wild_transitive — S-WILD-DISCLOSURE-CLI transitive-wild fixture."
+
+[surface]
+exports = ["run_wild_transitive"]

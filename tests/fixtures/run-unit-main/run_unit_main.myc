@@ -1,0 +1,8 @@
+// nodule: run_unit_main
+// @summary: S-RUN-COREVALUE fixture (PKG-INTERP-CORRECTNESS) — the measured baseline repro from the
+// package's success criteria: `nodule proj; fn main() => Unit = Unit;`. `Unit` evaluates to a
+// `CoreValue::Data` (a nullary constructor), which `Interpreter::eval` hard-refuses
+// (`EvalError::DataResult`) but `Interpreter::eval_core` accepts.
+nodule run_unit_main;
+
+fn main() => Unit = Unit;

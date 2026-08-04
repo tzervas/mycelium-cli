@@ -1,0 +1,13 @@
+# Committed fixture for S-RUN-COREVALUE (PKG-INTERP-CORRECTNESS): a nullary `main` whose result is
+# `Unit` — an algebraic DATA value (a nullary constructor), not a representation `Value`. Before the
+# `eval`→`eval_core` switch this refused with `EvalError::DataResult` (rc=65) even though `myc check`
+# already called it clean; it must now run end-to-end.
+[project]
+name    = "run_unit_main"
+kind    = "phylum"
+version = "0.1.0"
+license = "MIT"
+summary = "run_unit_main — S-RUN-COREVALUE data-result fixture."
+
+[surface]
+exports = ["run_unit_main"]

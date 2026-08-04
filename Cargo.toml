@@ -34,6 +34,14 @@ mycelium-l1 = { git = "https://github.com/tzervas/mycelium-l1", rev = "4e4a29679
 # L0 Core IR and evaluates it here — the same trusted execution path the differential suite pins.
 # Pinned to mycelium-runtime main (HostCallRegistry / register_host / has_host / install_host_ops).
 mycelium-interp = { git = "https://github.com/tzervas/mycelium-runtime", rev = "7842042d770108b2d179ff2874f1871dc4821604" }
+# S-RUN-COREVALUE / S-WILD-DISCLOSURE-CLI (PKG-INTERP-CORRECTNESS): `CoreValue`/`Datum`/`Node`/`Alt`
+# are NOT re-exported by `mycelium-interp`/`mycelium-l1` (they only `use` them internally), so this
+# crate needs its own direct handle on the same types to name them in `render_core_value`/
+# `render_datum` (the new `eval_core` result) and `contains_wild` (the wild-boundary disclosure
+# walk). Pinned to the EXACT SAME commit `mycelium-interp`/`mycelium-l1` already resolve internally
+# (see their own Cargo.toml `mycelium-core` pins) so Cargo unifies this to one compiled instance —
+# never a second, incompatible copy of the same types.
+mycelium-core = { git = "https://github.com/tzervas/mycelium-core", rev = "57ef45b453eef1f02bdfb1f0cad1034dabd32b1f" }
 # The shared CLI substrate (M-643): the `.myc` source walk + read helpers, reused not re-rolled.
 mycelium-cli-common = { git = "https://github.com/tzervas/mycelium-cli-common", rev = "28e81b67a5d21bc3bdf8904a6ce36dd9ccb515b9" }
 # Production host wiring (RFC-0028 §4.5): default wild: table via `install_default_host_ops`.
